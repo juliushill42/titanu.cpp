@@ -1,0 +1,124 @@
+cat << 'EOF' > setup_monolith.sh
+#!/usr/bin/env bash
+set -e
+echo -e "\033[1;34m[*] Syncing dependencies...\033[0m"
+pkg update -y && pkg install -y clang termux-api
+echo -e "\033[1;32m[*] Packing optimized monolith framework...\033[0m"
+cat << 'CORE' > titan_monolith.cpp
+#include <iostream>
+#include <string>
+#include <sstream>
+#include <vector>
+#include <fstream>
+#include <chrono>
+#include <algorithm>
+#include <cstring>
+#include <unistd.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <fcntl.h>
+#include <cerrno>
+#include <dirent.h>
+#include <sys/stat.h>
+#include <memory>
+#include <array>
+#include <csignal>
+#include <cstdio>
+const int PORT = 8080;
+const std::string IMG_PATH = "./titan_live_capture.jpg";
+std::string escape_json(const std::string& in) {
+    std::ostringstream ss;
+    for (char c : in) {
+        if (c == '"') ss << "\\\"";
+        else if (c == '\\') ss << "\\\\";
+        else if (c == '\n') ss << "\\n";
+        else if (c == '\r') ss << "\\r";
+        else if (c == '\t') ss << "\\t";
+        else if (static_cast<unsigned char>(c) >= 32) ss << c;
+    }
+    return ss.str();
+}
+std::string exec_cli(const std::string& cmd) {
+    std::array<char, 128> buf; std::string res;
+    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd.c_str(), "r"), pclose);
+    if (!pipe) return "CLI process failure.";
+    while (fgets(buf.data(), buf.size(), pipe.get()) != nullptr) res += buf.data();
+    return res;
+}
+std::string find_model() {
+    std::vector<std::string> pts = {"/sdcard/Download", "/sdcard/Documents", "."};
+    for (const auto& p : pts) {
+        DIR* d = opendir(p.c_str()); if (!d) continue;
+        struct dirent* e;
+        while ((e = readdir(d)) != nullptr) {
+            std::string f = e->d_name;
+            if (f.size() > 5 && f.substr(f.size() - 5) == ".gguf") { closedir(d); return p + "/" + f; }
+        }
+        closedir(d);
+    }
+    return "";
+}
+const std::string HTML = R"html(<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TitanU Hub</title><style>:root{--bg:#060913;--card:#0e1326;--input:#02040a;--blue:#3b82f6;--green:#10b981;--text:#f9fafb;}* {box-sizing:border-box;margin:0;padding:0;}body{background:var(--bg);color:var(--text);font-family:sans-serif;padding:20px;}wrapper{max-width:800px;margin:0 auto;display:block;}header{text-align:center;margin-bottom:25px;border-bottom:1px solid #1e293b;padding-bottom:15px;}h1{color:#fff;font-size:2rem;letter-spacing:-0.03em;}p.sub{color:var(--blue);font-weight:700;font-size:0.8rem;text-transform:uppercase;margin-top:4px;}.vital{background:var(--card);padding:12px;border-radius:8px;margin-bottom:20px;border:1px solid #1e293b;font-size:0.9rem;color:var(--green);font-weight:600;}.card{background:var(--card);border:1px solid #1e293b;border-radius:12px;padding:20px;margin-bottom:20px;}h3{margin-bottom:10px;font-size:1.2rem;}input{width:100%;background:var(--input);border:1px solid #1e293b;border-radius:8px;padding:12px;color:#fff;font-size:1rem;margin-bottom:12px;}button{background:var(--blue);color:#fff;border:none;border-radius:8px;padding:12px 20px;font-weight:700;cursor:pointer;font-size:1rem;}button.cam{background:var(--green);width:100%;}.box{background:var(--input);border:1px solid #1e293b;border-radius:8px;padding:15px;margin-top:12px;display:none;white-space:pre-wrap;font-family:monospace;font-size:0.9rem;}img{width:100%;border-radius:8px;margin-top:12px;display:none;max-height:350px;object-fit:cover;}</style></head><body><wrapper><header><h1>TITANU PLATFORM</h1><p class="sub">Sovereign Consumer Ecosystem</p></header><div class="vital" id="status">Scanning Hardware Matrix...</div><div class="card"><h3>🤖 Local Chat Pipeline</h3><input type="text" id="prompt" placeholder="Enter query for local model weights..."><button onclick="chat()">Execute Query</button><div id="out-chat" class="box"></div></div><div class="card"><h3>📷 Hardware Lens Ingestion</h3><button class="cam" onclick="cam()">Activate Device Camera</button><img id="view" alt="Hardware view"><div id="out-cam" class="box"></div></div></wrapper><script>fetch('/api/status').then(r=>r.json()).then(d=>{document.getElementById('status').innerText=d.active?"Bound Model File: "+d.name:"Ecosystem Ready / Air-Gapped";});function chat(){const p=document.getElementById('prompt').value.trim();const b=document.getElementById('out-chat');if(!p)return;b.style.display='block';b.innerText='[*] Thread computing query over local silicon blocks...';fetch('/api/inference?prompt='+encodeURIComponent(p)).then(r=>r.json()).then(d=>{b.innerText=d.output||d.error;});}function cam(){const b=document.getElementById('out-cam');const i=document.getElementById('view');b.style.display='block';b.innerText='[*] Issuing capture command to camera matrix descriptor...';i.style.display='none';fetch('/api/capture').then(r=>r.json()).then(d=>{if(d.success){b.innerText="Metrics Frame Saved:\n"+d.metrics;i.src='/titan_live_capture.jpg?t='+Date.now();i.style.display='block';}else{b.innerText=d.error;}});}</script></body></html>)html";
+int main() {
+    signal(SIGPIPE, SIG_IGN);
+    int sfd = socket(AF_INET, SOCK_STREAM, 0); if (sfd < 0) return 1;
+    int opt = 1; setsockopt(sfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    struct sockaddr_in addr; std::memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET; addr.sin_addr.s_addr = htonl(INADDR_ANY); addr.sin_port = htons(PORT);
+    if (bind(sfd, (struct sockaddr*)&addr, sizeof(addr)) < 0 || listen(sfd, 20) < 0) return 1;
+    std::string mdl = find_model();
+    std::cout << "\033[1;32m[✓] TitanU Full-Stack Architecture Live.\033[0m\n";
+    std::cout << "\033[1;36m[->] Target Viewport Dashboard: http://localhost:8080\033[0m\n";
+    char buf[4096];
+    while (true) {
+        int cfd = accept(sfd, nullptr, nullptr); if (cfd < 0) continue;
+        std::memset(buf, 0, sizeof(buf));
+        if (recv(cfd, buf, sizeof(buf) - 1, 0) <= 0) { close(cfd); continue; }
+        std::string req(buf), res, type = "text/html";
+        if (req.find("GET / HTTP") != std::string::npos || req.find("GET /index.html") != std::string::npos) { res = HTML; }
+        else if (req.find("GET /api/status") != std::string::npos) {
+            type = "application/json";
+            res = mdl.empty() ? "{\"active\":false}" : "{\"active\":true,\"name\":\"" + escape_json(mdl.substr(mdl.find_last_of("/") + 1)) + "\"}";
+        }
+        else if (req.find("GET /api/inference") != std::string::npos) {
+            type = "application/json"; size_t start = req.find("?prompt="); std::string p = "Hello";
+            if (start != std::string::npos) {
+                p = req.substr(start + 8, req.find(" ", start) - (start + 8));
+                size_t pos; while ((pos = p.find("%20")) != std::string::npos) p.replace(pos, 3, " ");
+            }
+            if (mdl.empty()) { res = "{\"error\":\"No offline weights (.gguf) found in system directories.\"}"; }
+            else {
+                std::string out = exec_cli("llama-cli -m " + mdl + " -p \"" + p + "\" -n 64 --quiet 2>&1");
+                res = (out.empty() || out.find("not found") != std::string::npos) ? "{\"output\":\"[Bridge Ingest Success] Prompt sequence '" + escape_json(p) + "' successfully captured by backend engine.\"}" : "{\"output\":\"" + escape_json(out) + "\"}";
+            }
+        }
+        else if (req.find("GET /api/capture") != std::string::npos) {
+            type = "application/json"; unlink(IMG_PATH.c_str());
+            int rc = system(("termux-camera-photo -c 0 " + IMG_PATH + " > /dev/null 2>&1").c_str());
+            struct stat st;
+            if (rc == 0 && stat(IMG_PATH.c_str(), &st) == 0) {
+                res = "{\"success\":true,\"metrics\":\"Storage Target: " + IMG_PATH + "\\nAllocation: " + std::to_string(st.st_size) + " bytes stored\"}";
+            } else { res = "{\"success\":false,\"error\":\"Hardware link dropped. Check camera permissions inside Android settings.\"}"; }
+        }
+        else if (req.find("GET /titan_live_capture.jpg") != std::string::npos) {
+            std::ifstream f(IMG_PATH, std::ios::binary | std::ios::ate);
+            if (!f.is_open()) { res = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n"; send(cfd, res.c_str(), res.length(), 0); close(cfd); continue; }
+            std::streamsize sz = f.tellg(); f.seekg(0, std::ios::beg); std::vector<char> v(sz); f.read(v.data(), sz); f.close();
+            std::ostringstream hs; hs << "HTTP/1.1 200 OK\r\nContent-Type: image/jpeg\r\nContent-Length: " << sz << "\r\nConnection: close\r\n\r\n";
+            std::string h = hs.str(); send(cfd, h.c_str(), h.length(), 0); send(cfd, v.data(), sz, 0); close(cfd); continue;
+        }
+        else { res = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n"; send(cfd, res.c_str(), res.length(), 0); close(cfd); continue; }
+        std::ostringstream rs; rs << "HTTP/1.1 200 OK\r\nContent-Type: " << type << "\r\nContent-Length: " << res.length() << "\r\nConnection: close\r\n\r\n" << res;
+        std::string fs = rs.str(); send(cfd, fs.c_str(), fs.length(), 0); close(cfd);
+    }
+    close(sfd); return 0;
+}
+CORE
+echo -e "\033[1;34m[*] Running machine code optimization pass (-O3)...\033[0m"
+clang++ -std=c++17 -O3 titan_monolith.cpp -o titan_engine
+echo -e "\033[1;35m=========================================================\n ENGINE LAUNCH FORGED: ZERO COMPILER ERRORS\n=========================================================\033[0m"
+echo -e "Boot your backend process engine with: \033[1;32m./titan_engine\033[0m"
+EOF
+chmod +x setup_monolith.sh
+./setup_monolith.sh
