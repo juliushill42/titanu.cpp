@@ -25,8 +25,10 @@ cat << 'CORE' > titan_monolith.cpp
 #include <array>
 #include <csignal>
 #include <cstdio>
+
 const int PORT = 8080;
 const std::string IMG_PATH = "./titan_live_capture.jpg";
+
 std::string escape_json(const std::string& in) {
     std::ostringstream ss;
     for (char c : in) {
@@ -39,6 +41,7 @@ std::string escape_json(const std::string& in) {
     }
     return ss.str();
 }
+
 std::string exec_cli(const std::string& cmd) {
     std::array<char, 128> buf; std::string res;
     std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd.c_str(), "r"), pclose);
@@ -46,6 +49,7 @@ std::string exec_cli(const std::string& cmd) {
     while (fgets(buf.data(), buf.size(), pipe.get()) != nullptr) res += buf.data();
     return res;
 }
+
 std::string find_model() {
     std::vector<std::string> pts = {"/sdcard/Download", "/sdcard/Documents", "."};
     for (const auto& p : pts) {
@@ -59,7 +63,158 @@ std::string find_model() {
     }
     return "";
 }
-const std::string HTML = R"html(<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TitanU Hub</title><style>:root{--bg:#060913;--card:#0e1326;--input:#02040a;--blue:#3b82f6;--green:#10b981;--text:#f9fafb;}* {box-sizing:border-box;margin:0;padding:0;}body{background:var(--bg);color:var(--text);font-family:sans-serif;padding:20px;}wrapper{max-width:800px;margin:0 auto;display:block;}header{text-align:center;margin-bottom:25px;border-bottom:1px solid #1e293b;padding-bottom:15px;}h1{color:#fff;font-size:2rem;letter-spacing:-0.03em;}p.sub{color:var(--blue);font-weight:700;font-size:0.8rem;text-transform:uppercase;margin-top:4px;}.vital{background:var(--card);padding:12px;border-radius:8px;margin-bottom:20px;border:1px solid #1e293b;font-size:0.9rem;color:var(--green);font-weight:600;}.card{background:var(--card);border:1px solid #1e293b;border-radius:12px;padding:20px;margin-bottom:20px;}h3{margin-bottom:10px;font-size:1.2rem;}input{width:100%;background:var(--input);border:1px solid #1e293b;border-radius:8px;padding:12px;color:#fff;font-size:1rem;margin-bottom:12px;}button{background:var(--blue);color:#fff;border:none;border-radius:8px;padding:12px 20px;font-weight:700;cursor:pointer;font-size:1rem;}button.cam{background:var(--green);width:100%;}.box{background:var(--input);border:1px solid #1e293b;border-radius:8px;padding:15px;margin-top:12px;display:none;white-space:pre-wrap;font-family:monospace;font-size:0.9rem;}img{width:100%;border-radius:8px;margin-top:12px;display:none;max-height:350px;object-fit:cover;}</style></head><body><wrapper><header><h1>TITANU PLATFORM</h1><p class="sub">Sovereign Consumer Ecosystem</p></header><div class="vital" id="status">Scanning Hardware Matrix...</div><div class="card"><h3>🤖 Local Chat Pipeline</h3><input type="text" id="prompt" placeholder="Enter query for local model weights..."><button onclick="chat()">Execute Query</button><div id="out-chat" class="box"></div></div><div class="card"><h3>📷 Hardware Lens Ingestion</h3><button class="cam" onclick="cam()">Activate Device Camera</button><img id="view" alt="Hardware view"><div id="out-cam" class="box"></div></div></wrapper><script>fetch('/api/status').then(r=>r.json()).then(d=>{document.getElementById('status').innerText=d.active?"Bound Model File: "+d.name:"Ecosystem Ready / Air-Gapped";});function chat(){const p=document.getElementById('prompt').value.trim();const b=document.getElementById('out-chat');if(!p)return;b.style.display='block';b.innerText='[*] Thread computing query over local silicon blocks...';fetch('/api/inference?prompt='+encodeURIComponent(p)).then(r=>r.json()).then(d=>{b.innerText=d.output||d.error;});}function cam(){const b=document.getElementById('out-cam');const i=document.getElementById('view');b.style.display='block';b.innerText='[*] Issuing capture command to camera matrix descriptor...';i.style.display='none';fetch('/api/capture').then(r=>r.json()).then(d=>{if(d.success){b.innerText="Metrics Frame Saved:\n"+d.metrics;i.src='/titan_live_capture.jpg?t='+Date.now();i.style.display='block';}else{b.innerText=d.error;}});}</script></body></html>)html";
+
+const std::string HTML = R"html(<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TitanU Premium Command Hub</title>
+    <style>
+        :root {
+            --bg: #030712;
+            --card: #0b1329;
+            --input: #010409;
+            --border: #1f293d;
+            --blue: #2563eb;
+            --blue-glow: #3b82f6;
+            --green: #10b981;
+            --text-main: #f9fafb;
+            --text-muted: #9ca3af;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { background-color: var(--bg); color: var(--text-main); padding: 30px 15px; }
+        .container { max-width: 950px; margin: 0 auto; }
+        
+        header { text-align: center; margin-bottom: 35px; }
+        header h1 { font-size: 2.4rem; font-weight: 800; letter-spacing: -0.04em; background: linear-gradient(to right, #ffffff, #60a5fa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        header p { color: var(--blue-glow); font-size: 0.9rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.15em; margin-top: 6px; }
+        
+        .telemetry-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 15px; margin-bottom: 30px; }
+        .stat-widget { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px 20px; display: flex; align-items: center; gap: 14px; }
+        .indicator { width: 10px; height: 10px; border-radius: 50%; background: var(--green); box-shadow: 0 0 10px var(--green); }
+        .stat-details h4 { font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.05em; }
+        .stat-details p { font-size: 1rem; font-weight: 600; margin-top: 2px; }
+        
+        .main-grid { display: grid; grid-template-columns: 1fr; gap: 25px; }
+        @media(min-width: 768px) { .main-grid { grid-template-columns: 1fr 1fr; } }
+        
+        .panel { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 25px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); display: flex; flex-direction: column; justify-content: space-between; }
+        .panel-header { margin-bottom: 20px; }
+        .panel-header h2 { font-size: 1.3rem; font-weight: 700; margin-bottom: 6px; display: flex; align-items: center; gap: 10px; }
+        .panel-header p { color: var(--text-muted); font-size: 0.9rem; line-height: 1.5; }
+        
+        .control-group { position: relative; }
+        input[type="text"] { width: 100%; background: var(--input); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; color: #fff; font-size: 1rem; transition: border-color 0.2s; margin-bottom: 12px; }
+        input[type="text"]:focus { outline: none; border-color: var(--blue-glow); }
+        
+        button { width: 100%; background: var(--blue); color: #fff; border: none; border-radius: 10px; padding: 14px; font-weight: 700; font-size: 1rem; cursor: pointer; transition: all 0.2s; }
+        button:hover { background: #1d4ed8; transform: translateY(-1px); }
+        button.btn-alt { background: var(--green); }
+        button.btn-alt:hover { background: #059669; }
+        
+        .console-stream { background: var(--input); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-top: 15px; font-family: monospace; font-size: 0.85rem; line-height: 1.5; color: #e5e7eb; display: none; white-space: pre-wrap; max-height: 200px; overflow-y: auto; }
+        .view-frame { width: 100%; border-radius: 10px; border: 1px solid var(--border); margin-top: 15px; display: none; max-height: 260px; object-fit: cover; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>TITANU PREMIUM HUB</h1>
+            <p>Sovereign Consumer Application Architecture</p>
+        </header>
+
+        <div class="telemetry-row">
+            <div class="stat-widget">
+                <div class="indicator"></div>
+                <div class="stat-details">
+                    <h4>Ecosystem Connectivity</h4>
+                    <p>100% Air-Gapped Silicon</p>
+                </div>
+            </div>
+            <div class="stat-widget">
+                <div class="indicator" id="model-indicator" style="background:#3b82f6; box-shadow:0 0 10px #3b82f6;"></div>
+                <div class="stat-details">
+                    <h4>Active Engine Core</h4>
+                    <p id="model-name">Scanning weights...</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="main-grid">
+            <div class="panel">
+                <div class="panel-header">
+                    <h2>🤖 Local Cognition Pipeline</h2>
+                    <p>Transmit open-ended queries directly into your device's physical offline model arrays without data center dependencies.</p>
+                </div>
+                <div class="control-group">
+                    <input type="text" id="prompt-input" placeholder="Enter prompt sequence...">
+                    <button onclick="runInference()">Execute Loop</button>
+                    <div id="infer-cache" class="console-stream"></div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">
+                    <h2>📷 Physical Lens Ingestion</h2>
+                    <p>Trigger your phone's integrated camera layer directly from the workspace to capture and monitor raw device asset parameters.</p>
+                </div>
+                <div class="control-group">
+                    <button class="btn-alt" onclick="runCapture()">Activate Lens Interface</button>
+                    <img id="capture-preview" alt="Hardware Node Matrix Asset">
+                    <div id="capture-cache" class="console-stream"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        fetch('/api/status').then(r=>r.json()).then(d=>{
+            const txt = document.getElementById('model-name');
+            const ind = document.getElementById('model-indicator');
+            if(d.active) {
+                txt.innerText = d.name;
+                ind.style.background = 'var(--green)';
+                ind.style.boxShadow = '0 0 10px var(--green)';
+            } else {
+                txt.innerText = 'Platform Mode Live';
+            }
+        });
+
+        function runInference(){
+            const el = document.getElementById('prompt-input');
+            const out = document.getElementById('infer-cache');
+            if(!el.value.trim()) return;
+            out.style.display = 'block';
+            out.innerText = '[*] Piping query token sequence straight to execution registers...';
+            
+            fetch('/api/inference?prompt='+encodeURIComponent(el.value.trim()))
+                .then(r=>r.json())
+                .then(d=>{ out.innerText = d.output || d.error; })
+                .catch(()=>{ out.innerText = '[!] Interface communication fault with background loop.'; });
+        }
+
+        function runCapture(){
+            const out = document.getElementById('capture-cache');
+            const img = document.getElementById('capture-preview');
+            out.style.display = 'block';
+            out.innerText = '[*] Issuing direct hardware capture interrupt to Android kernel...';
+            img.style.display = 'none';
+            
+            fetch('/api/capture').then(r=>r.json()).then(d=>{
+                if(d.success){
+                    out.innerText = "Frame Synchronized Cleanly:\n" + d.metrics;
+                    img.src = '/titan_live_capture.jpg?t=' + Date.now();
+                    img.style.display = 'block';
+                } else {
+                    out.innerText = d.error;
+                }
+            }).catch(()=>{ out.innerText = '[!] Lens register handshake refused.'; });
+        }
+    </script>
+</body>
+</html>)html";
+
 int main() {
     signal(SIGPIPE, SIG_IGN);
     int sfd = socket(AF_INET, SOCK_STREAM, 0); if (sfd < 0) return 1;
